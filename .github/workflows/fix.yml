@@ -1,0 +1,16 @@
+name: Fix
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  fix:
+    uses: leanucci/workflows/.github/workflows/fix.yml@v1
+    secrets: inherit

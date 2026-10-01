@@ -1,0 +1,15 @@
+/node_modules/
+/.next/
+/out/
+/build/
+/coverage/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/
+
+# Environment files. Never commit them.
+.env
+.env*.local
+
+npm-debug.log*
+.DS_Store

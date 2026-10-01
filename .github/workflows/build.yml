@@ -1,0 +1,26 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    paths: ["specs/**"]
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: "Spec file to build, for example specs/001-name.md"
+        required: true
+        type: string
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  build:
+    uses: leanucci/workflows/.github/workflows/build.yml@v1
+    with:
+      spec: ${{ inputs.spec }}
+    secrets: inherit
