@@ -168,6 +168,23 @@ describe("PomodoroApp", () => {
     expect(currentSession()).toBe("Focus");
   });
 
+  it("does not count a skipped focus session for the long break", () => {
+    render(<PomodoroApp />);
+    for (let i = 0; i < 3; i += 1) {
+      completeSession(25 * MINUTE);
+      completeSession(5 * MINUTE);
+    }
+    click("Start");
+    advance(MINUTE);
+    click("Skip");
+    expect(currentSession()).toBe("Short break");
+    expect(storedHistory()).toHaveLength(6);
+    click("Skip");
+    expect(currentSession()).toBe("Focus");
+    completeSession(25 * MINUTE);
+    expect(currentSession()).toBe("Long break");
+  });
+
   it("stops the timer and shows the full duration on reset", () => {
     render(<PomodoroApp />);
     click("Start");
