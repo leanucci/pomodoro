@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { INITIAL_TIMER_STATE, getRemainingMs, timerReducer } from "../timer";
+import { INITIAL_TIMER_STATE, getRemainingMs, idleState, timerReducer } from "../timer";
 
 const MINUTE = 60 * 1000;
 
@@ -20,30 +20,23 @@ describe("timerReducer", () => {
     expect(getRemainingMs(state, 6 * MINUTE)).toBe(20 * MINUTE);
   });
 
-  it("counts completed focus sessions and selects a long break after the fourth", () => {
-    let state = INITIAL_TIMER_STATE;
-    const kinds: string[] = [];
-    for (let i = 0; i < 8; i += 1) {
-      state = timerReducer(state, { type: "complete" });
-      kinds.push(state.kind);
-    }
-    expect(kinds).toEqual([
-      "shortBreak",
-      "focus",
-      "shortBreak",
-      "focus",
-      "shortBreak",
-      "focus",
-      "longBreak",
-      "focus",
-    ]);
-    expect(state.completedFocus).toBe(4);
+  it("selects a long break after the fourth completed focus session", () => {
+    const focus = idleState("focus");
+    expect(timerReducer(focus, { type: "complete", completedFocus: 1 }).kind).toBe("shortBreak");
+    expect(timerReducer(focus, { type: "complete", completedFocus: 3 }).kind).toBe("shortBreak");
+    expect(timerReducer(focus, { type: "complete", completedFocus: 4 }).kind).toBe("longBreak");
+    expect(timerReducer(focus, { type: "complete", completedFocus: 8 }).kind).toBe("longBreak");
+    expect(timerReducer(idleState("shortBreak"), { type: "complete", completedFocus: 3 }).kind).toBe("focus");
+    expect(timerReducer(idleState("longBreak"), { type: "complete", completedFocus: 4 }).kind).toBe("focus");
   });
 
-  it("does not count a skipped focus session", () => {
-    const state = timerReducer(INITIAL_TIMER_STATE, { type: "skip" });
+  it("selects a short break on skip from focus and focus on skip from a break", () => {
+    const running = timerReducer(INITIAL_TIMER_STATE, { type: "start", now: 0 });
+    const state = timerReducer(running, { type: "skip" });
     expect(state.kind).toBe("shortBreak");
-    expect(state.completedFocus).toBe(0);
+    expect(state.status).toBe("idle");
+    expect(timerReducer(idleState("shortBreak"), { type: "skip" }).kind).toBe("focus");
+    expect(timerReducer(idleState("longBreak"), { type: "skip" }).kind).toBe("focus");
   });
 
   it("stops the timer when the user selects a session type", () => {

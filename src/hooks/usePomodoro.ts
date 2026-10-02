@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useState, useSyncExternalStore } from "react";
-import { addRecord, todaysRecords, type SessionRecord } from "@/lib/history";
+import { addRecord, focusSessionsInCycle, todaysRecords, type SessionRecord } from "@/lib/history";
 import { SESSION_DURATION_MS } from "@/lib/session";
 import { playChime, unlockAudio } from "@/lib/sound";
 import {
@@ -71,12 +71,16 @@ export function usePomodoro(): Pomodoro {
         return;
       }
       done = true;
-      saveHistory(
-        addRecord(loadHistory(), { kind, startedAt, endedAt: endTime, plannedMs: SESSION_DURATION_MS[kind] }),
-      );
+      const updated = addRecord(loadHistory(), {
+        kind,
+        startedAt,
+        endedAt: endTime,
+        plannedMs: SESSION_DURATION_MS[kind],
+      });
+      saveHistory(updated);
       playChime();
       setNow(current);
-      dispatch({ type: "complete" });
+      dispatch({ type: "complete", completedFocus: focusSessionsInCycle(updated, endTime) });
     };
 
     const interval = window.setInterval(tick, TICK_MS);

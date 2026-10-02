@@ -76,3 +76,25 @@ export function todaysRecords(history: readonly SessionRecord[], now: number): S
     .filter((record) => isSameLocalDay(record.endedAt, now))
     .sort((a, b) => b.endedAt - a.endedAt);
 }
+
+/**
+ * Counts the completed focus sessions today in the current long-break cycle.
+ * The cycle starts after the newest long break of today. A skipped session has
+ * no record, so it does not count.
+ *
+ * @param history - The full history.
+ * @param now - The current time, as epoch milliseconds.
+ * @returns The number of focus records today after the newest long break.
+ */
+export function focusSessionsInCycle(history: readonly SessionRecord[], now: number): number {
+  let count = 0;
+  for (const record of todaysRecords(history, now)) {
+    if (record.kind === "longBreak") {
+      break;
+    }
+    if (record.kind === "focus") {
+      count += 1;
+    }
+  }
+  return count;
+}

@@ -109,6 +109,37 @@ describe("PomodoroApp", () => {
     expect(currentSession()).toBe("Focus");
   });
 
+  it("continues the long-break cycle after a reload", () => {
+    const at = (minutes: number) => NOW.getTime() - minutes * MINUTE;
+    const records = [
+      { kind: "focus", startedAt: at(120), endedAt: at(95), plannedMs: 25 * MINUTE },
+      { kind: "shortBreak", startedAt: at(95), endedAt: at(90), plannedMs: 5 * MINUTE },
+      { kind: "focus", startedAt: at(90), endedAt: at(65), plannedMs: 25 * MINUTE },
+      { kind: "shortBreak", startedAt: at(65), endedAt: at(60), plannedMs: 5 * MINUTE },
+      { kind: "focus", startedAt: at(60), endedAt: at(35), plannedMs: 25 * MINUTE },
+      { kind: "shortBreak", startedAt: at(35), endedAt: at(30), plannedMs: 5 * MINUTE },
+    ];
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(records));
+    render(<PomodoroApp />);
+    expect(currentSession()).toBe("Focus");
+    completeSession(25 * MINUTE);
+    expect(currentSession()).toBe("Long break");
+  });
+
+  it("starts a new cycle after a long break in the stored history", () => {
+    const at = (minutes: number) => NOW.getTime() - minutes * MINUTE;
+    const records = [
+      { kind: "focus", startedAt: at(120), endedAt: at(95), plannedMs: 25 * MINUTE },
+      { kind: "focus", startedAt: at(95), endedAt: at(70), plannedMs: 25 * MINUTE },
+      { kind: "focus", startedAt: at(70), endedAt: at(45), plannedMs: 25 * MINUTE },
+      { kind: "longBreak", startedAt: at(45), endedAt: at(30), plannedMs: 15 * MINUTE },
+    ];
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(records));
+    render(<PomodoroApp />);
+    completeSession(25 * MINUTE);
+    expect(currentSession()).toBe("Short break");
+  });
+
   it("keeps the remaining time during a pause", () => {
     render(<PomodoroApp />);
     click("Start");
