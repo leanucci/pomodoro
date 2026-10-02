@@ -30,7 +30,10 @@ function parseHistory(raw: string | null): readonly SessionRecord[] {
     if (!Array.isArray(data)) {
       return EMPTY_HISTORY;
     }
-    return data.filter(isSessionRecord).slice(-MAX_HISTORY_RECORDS);
+    return data
+      .filter(isSessionRecord)
+      .sort((a, b) => a.endedAt - b.endedAt)
+      .slice(-MAX_HISTORY_RECORDS);
   } catch {
     return EMPTY_HISTORY;
   }
