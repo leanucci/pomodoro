@@ -127,7 +127,7 @@ export function PomodoroApp() {
         ) : (
           <ul aria-label="Completed sessions today" className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
             {today.map((record) => (
-              <li key={`${record.endedAt}-${record.kind}`} className="flex justify-between gap-4 py-2">
+              <li key={`${record.startedAt}-${record.endedAt}-${record.kind}`} className="flex justify-between gap-4 py-2">
                 <span>{SESSION_LABEL[record.kind]}</span>
                 <span className="text-zinc-600 tabular-nums dark:text-zinc-400">
                   {timeFormat.format(record.startedAt)}–{timeFormat.format(record.endedAt)}
