@@ -26,8 +26,21 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
 
 /** The Pomodoro timer with its controls and today's history. */
 export function PomodoroApp() {
-  const { timer, remainingMs, today, todayFocusCount, historySize, start, pause, toggle, reset, skip, select, clearHistory } =
-    usePomodoro();
+  const {
+    timer,
+    remainingMs,
+    today,
+    todayFocusCount,
+    historySize,
+    storageAvailable,
+    start,
+    pause,
+    toggle,
+    reset,
+    skip,
+    select,
+    clearHistory,
+  } = usePomodoro();
   const time = formatDuration(remainingMs);
   const label = SESSION_LABEL[timer.kind];
 
@@ -59,6 +72,15 @@ export function PomodoroApp() {
   return (
     <main className="mx-auto flex w-full max-w-xl flex-col gap-8 px-4 py-8 sm:py-12">
       <h1 className="text-center text-2xl font-semibold">Pomodoro</h1>
+
+      {!storageAvailable && (
+        <p
+          role="status"
+          className="rounded-lg border border-amber-400 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-500 dark:bg-amber-950 dark:text-amber-100"
+        >
+          The browser storage is not available. The app cannot save your history after you close the page.
+        </p>
+      )}
 
       <section aria-label="Timer" className="flex flex-col items-center gap-6">
         <div role="group" aria-label="Session type" className="flex w-full flex-wrap justify-center gap-2">

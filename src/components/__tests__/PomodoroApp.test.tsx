@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HISTORY_STORAGE_KEY } from "@/lib/storage";
+import { HISTORY_STORAGE_KEY, clearStoredHistory } from "@/lib/storage";
 import { PomodoroApp } from "../PomodoroApp";
 
 vi.mock("@/lib/sound", () => ({
@@ -280,5 +280,25 @@ describe("PomodoroApp", () => {
       document.dispatchEvent(new Event("visibilitychange"));
     });
     expect(remaining()).toBe("15:00");
+  });
+
+  it("does not show a storage notice when the storage is available", () => {
+    render(<PomodoroApp />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("shows a notice when the storage is not available and keeps today's sessions in memory", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Blocked", "SecurityError");
+    });
+    render(<PomodoroApp />);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "The browser storage is not available. The app cannot save your history after you close the page.",
+    );
+
+    completeSession(25 * MINUTE);
+    expect(currentSession()).toBe("Short break");
+    expect(focusCount()).toBe("1 focus session today");
+    clearStoredHistory();
   });
 });

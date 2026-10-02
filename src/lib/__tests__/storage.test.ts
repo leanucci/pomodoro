@@ -1,10 +1,22 @@
-import { describe, expect, it } from "vitest";
-import { MAX_HISTORY_RECORDS } from "../history";
-import { HISTORY_STORAGE_KEY, clearStoredHistory, loadHistory, saveHistory } from "../storage";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { MAX_HISTORY_RECORDS, type SessionRecord } from "../history";
+import {
+  HISTORY_STORAGE_KEY,
+  clearStoredHistory,
+  isStorageAvailable,
+  loadHistory,
+  saveHistory,
+  subscribeHistory,
+} from "../storage";
 
-const valid = { kind: "focus", startedAt: 1, endedAt: 2, plannedMs: 1 };
+const valid: SessionRecord = { kind: "focus", startedAt: 1, endedAt: 2, plannedMs: 1 };
 
 describe("storage", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    clearStoredHistory();
+  });
+
   it("returns an empty history when no data exists", () => {
     expect(loadHistory()).toEqual([]);
   });
@@ -58,5 +70,25 @@ describe("storage", () => {
     clearStoredHistory();
     expect(loadHistory()).toEqual([]);
     expect(localStorage.getItem(HISTORY_STORAGE_KEY)).toBeNull();
+  });
+
+  it("tells that the storage is available", () => {
+    const unsubscribe = subscribeHistory(() => {});
+    expect(isStorageAvailable()).toBe(true);
+    unsubscribe();
+  });
+
+  it("tells that the storage is not available and keeps the history in memory", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Blocked", "SecurityError");
+    });
+    const unsubscribe = subscribeHistory(() => {});
+    expect(isStorageAvailable()).toBe(false);
+
+    saveHistory([valid]);
+    expect(isStorageAvailable()).toBe(false);
+    expect(loadHistory()).toEqual([valid]);
+    expect(localStorage.getItem(HISTORY_STORAGE_KEY)).toBeNull();
+    unsubscribe();
   });
 });

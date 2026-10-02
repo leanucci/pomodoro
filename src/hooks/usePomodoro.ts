@@ -6,6 +6,8 @@ import { SESSION_DURATION_MS } from "@/lib/session";
 import { playChime, unlockAudio } from "@/lib/sound";
 import {
   clearStoredHistory,
+  isServerStorageAvailable,
+  isStorageAvailable,
   loadHistory,
   loadServerHistory,
   saveHistory,
@@ -28,6 +30,8 @@ export interface Pomodoro {
   todayFocusCount: number;
   /** The number of records in the full history. */
   historySize: number;
+  /** `false` if the app cannot save the history in the browser storage. */
+  storageAvailable: boolean;
   /** Starts the timer, or resumes it after a pause. */
   start: () => void;
   /** Pauses the timer. */
@@ -53,6 +57,7 @@ export function usePomodoro(): Pomodoro {
   const [timer, dispatch] = useReducer(timerReducer, INITIAL_TIMER_STATE);
   const [now, setNow] = useState(() => Date.now());
   const history = useSyncExternalStore(subscribeHistory, loadHistory, loadServerHistory);
+  const storageAvailable = useSyncExternalStore(subscribeHistory, isStorageAvailable, isServerStorageAvailable);
 
   useEffect(() => {
     if (timer.status !== "running" || timer.endTime === null || timer.startedAt === null) {
@@ -127,6 +132,7 @@ export function usePomodoro(): Pomodoro {
     today,
     todayFocusCount,
     historySize: history.length,
+    storageAvailable,
     start,
     pause,
     toggle,
