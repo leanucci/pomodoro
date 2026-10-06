@@ -16,3 +16,4 @@ The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Session history in browser storage, with today's focus count and today's sessions.
 - A control to clear the history, with confirmation.
 - A notice when the browser storage is not available.
+- A description for each focus session, with 100 characters at most. Today's list shows the descriptions and lets the user edit them.
