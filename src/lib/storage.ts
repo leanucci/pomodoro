@@ -2,7 +2,7 @@
  * Browser storage for the session history. This is the only module that
  * reads or writes `localStorage`.
  */
-import { MAX_HISTORY_RECORDS, isSessionRecord, type SessionRecord } from "./history";
+import { MAX_HISTORY_RECORDS, isSessionRecord, sanitizeRecord, type SessionRecord } from "./history";
 
 /** The `localStorage` key for the session history. */
 export const HISTORY_STORAGE_KEY = "pomodoro.history";
@@ -49,6 +49,7 @@ function parseHistory(raw: string | null): readonly SessionRecord[] {
     }
     return data
       .filter(isSessionRecord)
+      .map(sanitizeRecord)
       .sort((a, b) => a.endedAt - b.endedAt)
       .slice(-MAX_HISTORY_RECORDS);
   } catch {

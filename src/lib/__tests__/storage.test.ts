@@ -36,6 +36,12 @@ describe("storage", () => {
     expect(loadHistory()).toEqual([valid]);
   });
 
+  it("keeps records with no description and ignores a description that is not text", () => {
+    const described = { ...valid, endedAt: 3, description: "Write the report" };
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([valid, { ...valid, endedAt: 4, description: 7 }, described]));
+    expect(loadHistory()).toEqual([valid, described, { ...valid, endedAt: 4 }]);
+  });
+
   it("keeps the 500 newest records on load", () => {
     const records = Array.from({ length: MAX_HISTORY_RECORDS + 10 }, (_, i) => ({
       kind: "focus",

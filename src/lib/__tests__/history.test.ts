@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { MAX_HISTORY_RECORDS, addRecord, focusSessionsInCycle, todaysRecords, type SessionRecord } from "../history";
+import {
+  MAX_HISTORY_RECORDS,
+  addRecord,
+  focusSessionsInCycle,
+  normalizeDescription,
+  recordKey,
+  sanitizeRecord,
+  todaysRecords,
+  updateDescription,
+  type SessionRecord,
+} from "../history";
 
 function record(endedAt: number): SessionRecord {
   return { kind: "focus", startedAt: endedAt - 1000, endedAt, plannedMs: 1000 };
@@ -46,5 +56,50 @@ describe("focusSessionsInCycle", () => {
   it("does not count records from yesterday", () => {
     const yesterday = new Date(2026, 8, 30, 23, 0).getTime();
     expect(focusSessionsInCycle([of("focus", yesterday), of("focus", at(9))], now)).toBe(1);
+  });
+});
+
+describe("normalizeDescription", () => {
+  it("removes spaces at the start and at the end", () => {
+    expect(normalizeDescription("  Read  ")).toBe("Read");
+  });
+
+  it("returns undefined for an empty text", () => {
+    expect(normalizeDescription("")).toBeUndefined();
+    expect(normalizeDescription("   ")).toBeUndefined();
+  });
+
+  it("keeps at most 100 characters", () => {
+    expect(normalizeDescription("a".repeat(120))).toBe("a".repeat(100));
+  });
+});
+
+describe("updateDescription", () => {
+  const first = record(1000);
+  const second = { ...record(2000), description: "Draft" };
+
+  it("changes the description of one record", () => {
+    const result = updateDescription([first, second], recordKey(second), "  Final draft ");
+    expect(result).toEqual([first, { ...second, description: "Final draft" }]);
+  });
+
+  it("removes the description when the text is empty", () => {
+    const [, result] = updateDescription([first, second], recordKey(second), "  ");
+    expect(result).not.toHaveProperty("description");
+  });
+});
+
+describe("sanitizeRecord", () => {
+  it("keeps a record with no description", () => {
+    expect(sanitizeRecord(record(1000))).toEqual(record(1000));
+  });
+
+  it("ignores a description that is not text and keeps the record", () => {
+    const stored = { ...record(1000), description: 42 } as unknown as SessionRecord;
+    expect(sanitizeRecord(stored)).toEqual(record(1000));
+  });
+
+  it("keeps a text description", () => {
+    expect(sanitizeRecord({ ...record(1000), description: "Write" })).toEqual({ ...record(1000), description: "Write" });
   });
 });

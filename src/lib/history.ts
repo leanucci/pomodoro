@@ -10,7 +10,12 @@ export interface SessionRecord {
   endedAt: number;
   /** The planned duration of the session, in milliseconds. */
   plannedMs: number;
+  /** What the user did in the session. Only focus records have a description. */
+  description?: string;
 }
+
+/** The maximum number of characters in a session description. */
+export const MAX_DESCRIPTION_LENGTH = 100;
 
 /** The maximum number of records that the history keeps. */
 export const MAX_HISTORY_RECORDS = 500;
@@ -26,6 +31,68 @@ export function addRecord(history: readonly SessionRecord[], record: SessionReco
   return [...history, record]
     .sort((a, b) => a.endedAt - b.endedAt)
     .slice(-MAX_HISTORY_RECORDS);
+}
+
+/**
+ * Removes spaces at the start and at the end of a description and keeps at
+ * most {@link MAX_DESCRIPTION_LENGTH} characters.
+ *
+ * @param text - The text that the user typed.
+ * @returns The description, or `undefined` if the text is empty.
+ */
+export function normalizeDescription(text: string): string | undefined {
+  const description = text.trim().slice(0, MAX_DESCRIPTION_LENGTH).trim();
+  return description === "" ? undefined : description;
+}
+
+/**
+ * Sets the description of a record. An empty description removes the description.
+ *
+ * @param record - The record to change.
+ * @param text - The new description text.
+ * @returns A new record with the normalized description.
+ */
+export function withDescription(record: SessionRecord, text: string): SessionRecord {
+  const updated: SessionRecord = { ...record };
+  delete updated.description;
+  const description = normalizeDescription(text);
+  return description === undefined ? updated : { ...updated, description };
+}
+
+/**
+ * Returns a key that identifies a record in the history.
+ *
+ * @param record - The record.
+ * @returns A key made from the session type, start time, and end time.
+ */
+export function recordKey(record: SessionRecord): string {
+  return `${record.startedAt}-${record.endedAt}-${record.kind}`;
+}
+
+/**
+ * Changes the description of one record in the history.
+ *
+ * @param history - The current history.
+ * @param key - The key of the record to change, from {@link recordKey}.
+ * @param text - The new description text. An empty text removes the description.
+ * @returns A new history. The history does not change if no record has the key.
+ */
+export function updateDescription(history: readonly SessionRecord[], key: string, text: string): SessionRecord[] {
+  return history.map((record) => (recordKey(record) === key ? withDescription(record, text) : record));
+}
+
+/**
+ * Makes a clean record from stored data. Ignores a description that is not
+ * text, but keeps the record.
+ *
+ * @param record - A valid record from the storage.
+ * @returns A record with only the known fields.
+ */
+export function sanitizeRecord(record: SessionRecord): SessionRecord {
+  const { kind, startedAt, endedAt, plannedMs } = record;
+  const clean: SessionRecord = { kind, startedAt, endedAt, plannedMs };
+  const description: unknown = record.description;
+  return typeof description === "string" ? withDescription(clean, description) : clean;
 }
 
 /**
