@@ -1,0 +1,29 @@
+# Agent cycle. Do not change this file.
+# All logic is in leanucci/workflows. See its README.
+name: Agent
+
+on:
+  push:
+    branches: ["build/**"]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: "Spec file to build, for example specs/002-name.md. Run it on the build branch."
+        required: true
+        type: string
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  agent:
+    uses: leanucci/workflows/.github/workflows/agent.yml@v1
+    with:
+      spec: ${{ inputs.spec }}
+    secrets: inherit
