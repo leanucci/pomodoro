@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncE
 import {
   MAX_DESCRIPTION_LENGTH,
   addRecord,
+  createRecordId,
   focusSessionsInCycle,
   todaysRecords,
   updateDescription,
@@ -44,8 +45,8 @@ export interface Pomodoro {
   description: string;
   /** Sets the description text for the current focus session. Keeps at most 100 characters. */
   setDescription: (text: string) => void;
-  /** Changes the description of a stored record and saves the history immediately. */
-  editDescription: (key: string, text: string) => void;
+  /** Changes the description of the record with an ID and saves the history immediately. */
+  editDescription: (id: string, text: string) => void;
   /** Starts the timer, or resumes it after a pause. */
   start: () => void;
   /** Pauses the timer. */
@@ -99,7 +100,13 @@ export function usePomodoro(): Pomodoro {
         return;
       }
       done = true;
-      const record: SessionRecord = { kind, startedAt, endedAt: endTime, plannedMs: SESSION_DURATION_MS[kind] };
+      const record: SessionRecord = {
+        id: createRecordId(),
+        kind,
+        startedAt,
+        endedAt: endTime,
+        plannedMs: SESSION_DURATION_MS[kind],
+      };
       const updated = addRecord(
         loadHistory(),
         kind === "focus" ? withDescription(record, descriptionRef.current) : record,
@@ -153,7 +160,7 @@ export function usePomodoro(): Pomodoro {
   const select = useCallback((kind: TimerState["kind"]) => dispatch({ type: "select", kind }), []);
   const clearHistory = useCallback(() => clearStoredHistory(), []);
   const editDescription = useCallback(
-    (key: string, text: string) => saveHistory(updateDescription(loadHistory(), key, text)),
+    (id: string, text: string) => saveHistory(updateDescription(loadHistory(), id, text)),
     [],
   );
 

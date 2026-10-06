@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { usePomodoro } from "@/hooks/usePomodoro";
-import { MAX_DESCRIPTION_LENGTH, recordKey, type SessionRecord } from "@/lib/history";
+import { MAX_DESCRIPTION_LENGTH, type SessionRecord } from "@/lib/history";
 import { SESSION_KINDS, SESSION_LABEL, formatDuration } from "@/lib/session";
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -32,7 +32,7 @@ interface HistoryItemProps {
   /** The record to show. */
   record: SessionRecord;
   /** Saves a new description for the record. */
-  onEditDescription: (key: string, text: string) => void;
+  onEditDescription: (id: string, text: string) => void;
 }
 
 /**
@@ -60,7 +60,7 @@ function HistoryItem({ record, onEditDescription }: HistoryItemProps) {
 
   const finishEdit = (save: boolean) => {
     if (save) {
-      onEditDescription(recordKey(record), draft);
+      onEditDescription(record.id, draft);
     }
     returnFocus.current = true;
     setEditing(false);
@@ -266,7 +266,7 @@ export function PomodoroApp() {
         ) : (
           <ul aria-label="Completed sessions today" className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
             {today.map((record) => (
-              <HistoryItem key={recordKey(record)} record={record} onEditDescription={editDescription} />
+              <HistoryItem key={record.id} record={record} onEditDescription={editDescription} />
             ))}
           </ul>
         )}

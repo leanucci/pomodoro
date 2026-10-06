@@ -9,7 +9,9 @@ import {
   subscribeHistory,
 } from "../storage";
 
-const valid: SessionRecord = { kind: "focus", startedAt: 1, endedAt: 2, plannedMs: 1 };
+/** A record from before IDs existed. */
+const old = { kind: "focus", startedAt: 1, endedAt: 2, plannedMs: 1 } as const;
+const valid: SessionRecord = { id: "a", ...old };
 
 describe("storage", () => {
   afterEach(() => {
@@ -37,13 +39,15 @@ describe("storage", () => {
   });
 
   it("keeps records with no description and ignores a description that is not text", () => {
-    const described = { ...valid, endedAt: 3, description: "Write the report" };
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([valid, { ...valid, endedAt: 4, description: 7 }, described]));
-    expect(loadHistory()).toEqual([valid, described, { ...valid, endedAt: 4 }]);
+    const described = { ...valid, id: "b", endedAt: 3, description: "Write the report" };
+    const numbered = { ...valid, id: "c", endedAt: 4, description: 7 };
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([valid, numbered, described]));
+    expect(loadHistory()).toEqual([valid, described, { ...valid, id: "c", endedAt: 4 }]);
   });
 
   it("keeps the 500 newest records on load", () => {
     const records = Array.from({ length: MAX_HISTORY_RECORDS + 10 }, (_, i) => ({
+      id: `r${i}`,
       kind: "focus",
       startedAt: i * 1000,
       endedAt: i * 1000 + 500,
@@ -58,6 +62,7 @@ describe("storage", () => {
 
   it("keeps the 500 newest records on load when the stored order is not sorted", () => {
     const records = Array.from({ length: MAX_HISTORY_RECORDS + 10 }, (_, i) => ({
+      id: `r${i}`,
       kind: "focus",
       startedAt: i * 1000,
       endedAt: i * 1000 + 500,
@@ -70,8 +75,37 @@ describe("storage", () => {
     expect(history.at(-1)?.endedAt).toBe((MAX_HISTORY_RECORDS + 9) * 1000 + 500);
   });
 
+  it("gives an ID to each record from before IDs and saves the IDs", () => {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([old, old]));
+    const history = loadHistory();
+    expect(history).toEqual([
+      { ...old, id: expect.any(String) },
+      { ...old, id: expect.any(String) },
+    ]);
+    expect(history[0].id).not.toBe(history[1].id);
+    expect(JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) ?? "[]")).toEqual(history);
+    expect(loadHistory()).toBe(history);
+  });
+
+  it("keeps the same IDs for the visit when the app cannot save them", () => {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([old]));
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Full", "QuotaExceededError");
+    });
+    const history = loadHistory();
+    expect(history[0].id).toEqual(expect.any(String));
+    expect(loadHistory()).toBe(history);
+  });
+
+  it("gives a new ID to a record with a duplicate ID", () => {
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([valid, { ...valid, endedAt: 3 }]));
+    const [first, second] = loadHistory();
+    expect(first.id).toBe("a");
+    expect(second.id).not.toBe("a");
+  });
+
   it("saves and clears the history", () => {
-    saveHistory([{ kind: "focus", startedAt: 1, endedAt: 2, plannedMs: 1 }]);
+    saveHistory([valid]);
     expect(loadHistory()).toHaveLength(1);
     clearStoredHistory();
     expect(loadHistory()).toEqual([]);

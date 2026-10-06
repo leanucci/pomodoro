@@ -75,6 +75,7 @@ describe("PomodoroApp", () => {
     expect(playChime).toHaveBeenCalledTimes(1);
     expect(storedHistory()).toEqual([
       {
+        id: expect.any(String),
         kind: "focus",
         startedAt: NOW.getTime(),
         endedAt: NOW.getTime() + 25 * MINUTE,
@@ -466,6 +467,36 @@ describe("PomodoroApp", () => {
       fireEvent.keyDown(editField(), { key: " ", code: "Space" });
       expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
       expect(remaining()).toBe("25:00");
+    });
+
+    it("changes only one of two records with the same type, start time, and end time", () => {
+      const record = {
+        kind: "focus",
+        startedAt: NOW.getTime() - 30 * MINUTE,
+        endedAt: NOW.getTime() - 5 * MINUTE,
+        plannedMs: 25 * MINUTE,
+      };
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([record, record]));
+      render(<PomodoroApp />);
+      const [first] = screen.getAllByRole("button", { name: /^Edit description of the focus session/ });
+      fireEvent.click(first);
+      fireEvent.change(editField(), { target: { value: "Only one" } });
+      fireEvent.keyDown(editField(), { key: "Enter" });
+
+      const descriptions = screen.getAllByTestId("record-description").map((element) => element.textContent);
+      expect(descriptions.filter((text) => text === "Only one")).toHaveLength(1);
+      expect(storedHistory().filter((item) => (item as { description?: string }).description === "Only one")).toHaveLength(1);
+    });
+
+    it("gives IDs to records from spec 001 and keeps the IDs after a reload", () => {
+      storeFocusRecord({});
+      const { unmount } = render(<PomodoroApp />);
+      const [stored] = storedHistory() as { id?: unknown }[];
+      expect(stored.id).toEqual(expect.any(String));
+      unmount();
+
+      render(<PomodoroApp />);
+      expect(storedHistory()).toEqual([expect.objectContaining({ id: stored.id })]);
     });
 
     it("shows records from spec 001 with no description and no error", () => {

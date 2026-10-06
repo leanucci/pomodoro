@@ -2,6 +2,8 @@ import { SESSION_KINDS, type SessionKind } from "./session";
 
 /** A record of one completed session. */
 export interface SessionRecord {
+  /** A unique ID for the record. */
+  id: string;
   /** The session type. */
   kind: SessionKind;
   /** The time when the user started the session, as epoch milliseconds. */
@@ -13,6 +15,9 @@ export interface SessionRecord {
   /** What the user did in the session. Only focus records have a description. */
   description?: string;
 }
+
+/** A record as the storage keeps it. Records from before IDs existed have no ID. */
+export type StoredRecord = Omit<SessionRecord, "id"> & { id?: unknown };
 
 /** The maximum number of characters in a session description. */
 export const MAX_DESCRIPTION_LENGTH = 100;
@@ -60,48 +65,54 @@ export function withDescription(record: SessionRecord, text: string): SessionRec
 }
 
 /**
- * Returns a key that identifies a record in the history.
+ * Makes a new unique record ID.
  *
- * @param record - The record.
- * @returns A key made from the session type, start time, and end time.
+ * @returns A random ID.
  */
-export function recordKey(record: SessionRecord): string {
-  return `${record.startedAt}-${record.endedAt}-${record.kind}`;
+export function createRecordId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // `crypto.randomUUID` is only available in secure contexts.
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
 }
 
 /**
  * Changes the description of one record in the history.
  *
  * @param history - The current history.
- * @param key - The key of the record to change, from {@link recordKey}.
+ * @param id - The ID of the record to change.
  * @param text - The new description text. An empty text removes the description.
- * @returns A new history. The history does not change if no record has the key.
+ * @returns A new history. The history does not change if no record has the ID.
  */
-export function updateDescription(history: readonly SessionRecord[], key: string, text: string): SessionRecord[] {
-  return history.map((record) => (recordKey(record) === key ? withDescription(record, text) : record));
+export function updateDescription(history: readonly SessionRecord[], id: string, text: string): SessionRecord[] {
+  return history.map((record) => (record.id === id ? withDescription(record, text) : record));
 }
 
 /**
  * Makes a clean record from stored data. Ignores a description that is not
- * text, but keeps the record.
+ * text, but keeps the record. Gives a new ID to a record with no valid ID.
  *
  * @param record - A valid record from the storage.
+ * @param usedIds - The IDs of the records that are already clean. A record
+ * with an ID from this set gets a new ID.
  * @returns A record with only the known fields.
  */
-export function sanitizeRecord(record: SessionRecord): SessionRecord {
+export function sanitizeRecord(record: StoredRecord, usedIds: ReadonlySet<string> = new Set()): SessionRecord {
   const { kind, startedAt, endedAt, plannedMs } = record;
-  const clean: SessionRecord = { kind, startedAt, endedAt, plannedMs };
+  const id = typeof record.id === "string" && record.id !== "" && !usedIds.has(record.id) ? record.id : createRecordId();
+  const clean: SessionRecord = { id, kind, startedAt, endedAt, plannedMs };
   const description: unknown = record.description;
   return typeof description === "string" ? withDescription(clean, description) : clean;
 }
 
 /**
- * Tells if a value is a valid session record.
+ * Tells if a value is a valid session record. The value does not need an ID.
  *
  * @param value - The value to check.
  * @returns `true` if the value is a valid record.
  */
-export function isSessionRecord(value: unknown): value is SessionRecord {
+export function isSessionRecord(value: unknown): value is StoredRecord {
   if (typeof value !== "object" || value === null) {
     return false;
   }
