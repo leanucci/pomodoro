@@ -1,7 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useReducer, useState, useSyncExternalStore } from "react";
-import { addRecord, focusSessionsInCycle, todaysRecords, type SessionRecord } from "@/lib/history";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import {
+  MAX_DESCRIPTION_LENGTH,
+  addRecord,
+  createRecordId,
+  focusSessionsInCycle,
+  todaysRecords,
+  updateDescription,
+  withDescription,
+  type SessionRecord,
+} from "@/lib/history";
 import { SESSION_DURATION_MS } from "@/lib/session";
 import { playChime, unlockAudio } from "@/lib/sound";
 import {
@@ -32,6 +41,12 @@ export interface Pomodoro {
   historySize: number;
   /** `false` if the app cannot save the history in the browser storage. */
   storageAvailable: boolean;
+  /** The description text for the current focus session, as the user typed it. */
+  description: string;
+  /** Sets the description text for the current focus session. Keeps at most 100 characters. */
+  setDescription: (text: string) => void;
+  /** Changes the description of the record with an ID and saves the history immediately. */
+  editDescription: (id: string, text: string) => void;
   /** Starts the timer, or resumes it after a pause. */
   start: () => void;
   /** Pauses the timer. */
@@ -58,6 +73,15 @@ export function usePomodoro(): Pomodoro {
   const [now, setNow] = useState(() => Date.now());
   const history = useSyncExternalStore(subscribeHistory, loadHistory, loadServerHistory);
   const storageAvailable = useSyncExternalStore(subscribeHistory, isStorageAvailable, isServerStorageAvailable);
+  const [description, setDescriptionState] = useState("");
+  // The timer effect reads the description from a ref, so typing does not restart the effect.
+  const descriptionRef = useRef("");
+
+  const setDescription = useCallback((text: string) => {
+    const value = text.slice(0, MAX_DESCRIPTION_LENGTH);
+    descriptionRef.current = value;
+    setDescriptionState(value);
+  }, []);
 
   useEffect(() => {
     if (timer.status !== "running" || timer.endTime === null || timer.startedAt === null) {
@@ -76,13 +100,21 @@ export function usePomodoro(): Pomodoro {
         return;
       }
       done = true;
-      const updated = addRecord(loadHistory(), {
+      const record: SessionRecord = {
+        id: createRecordId(),
         kind,
         startedAt,
         endedAt: endTime,
         plannedMs: SESSION_DURATION_MS[kind],
-      });
+      };
+      const updated = addRecord(
+        loadHistory(),
+        kind === "focus" ? withDescription(record, descriptionRef.current) : record,
+      );
       saveHistory(updated);
+      if (kind === "focus") {
+        setDescription("");
+      }
       playChime();
       setNow(current);
       dispatch({ type: "complete", completedFocus: focusSessionsInCycle(updated, endTime) });
@@ -95,7 +127,7 @@ export function usePomodoro(): Pomodoro {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [timer]);
+  }, [timer, setDescription]);
 
   const start = useCallback(() => {
     unlockAudio();
@@ -119,9 +151,18 @@ export function usePomodoro(): Pomodoro {
   }, [timer.status, pause, start]);
 
   const reset = useCallback(() => dispatch({ type: "reset" }), []);
-  const skip = useCallback(() => dispatch({ type: "skip" }), []);
+  const skip = useCallback(() => {
+    if (timer.kind === "focus") {
+      setDescription("");
+    }
+    dispatch({ type: "skip" });
+  }, [timer.kind, setDescription]);
   const select = useCallback((kind: TimerState["kind"]) => dispatch({ type: "select", kind }), []);
   const clearHistory = useCallback(() => clearStoredHistory(), []);
+  const editDescription = useCallback(
+    (id: string, text: string) => saveHistory(updateDescription(loadHistory(), id, text)),
+    [],
+  );
 
   const today = useMemo(() => todaysRecords(history, now), [history, now]);
   const todayFocusCount = today.filter((record) => record.kind === "focus").length;
@@ -133,6 +174,9 @@ export function usePomodoro(): Pomodoro {
     todayFocusCount,
     historySize: history.length,
     storageAvailable,
+    description,
+    setDescription,
+    editDescription,
     start,
     pause,
     toggle,

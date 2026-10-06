@@ -2,7 +2,7 @@
  * Browser storage for the session history. This is the only module that
  * reads or writes `localStorage`.
  */
-import { MAX_HISTORY_RECORDS, isSessionRecord, type SessionRecord } from "./history";
+import { MAX_HISTORY_RECORDS, isSessionRecord, sanitizeRecord, type SessionRecord } from "./history";
 
 /** The `localStorage` key for the session history. */
 export const HISTORY_STORAGE_KEY = "pomodoro.history";
@@ -38,21 +38,39 @@ function readRaw(): string | null {
   }
 }
 
-function parseHistory(raw: string | null): readonly SessionRecord[] {
+/** The result of {@link parseHistory}. */
+interface ParsedHistory {
+  /** The valid records. */
+  history: readonly SessionRecord[];
+  /** `true` if the parse gave a new ID to one or more records. */
+  addedIds: boolean;
+}
+
+function parseHistory(raw: string | null): ParsedHistory {
+  const empty: ParsedHistory = { history: EMPTY_HISTORY, addedIds: false };
   if (raw === null) {
-    return EMPTY_HISTORY;
+    return empty;
   }
   try {
     const data: unknown = JSON.parse(raw);
     if (!Array.isArray(data)) {
-      return EMPTY_HISTORY;
+      return empty;
     }
-    return data
+    const usedIds = new Set<string>();
+    let addedIds = false;
+    const history = data
       .filter(isSessionRecord)
+      .map((stored) => {
+        const record = sanitizeRecord(stored, usedIds);
+        usedIds.add(record.id);
+        addedIds ||= record.id !== stored.id;
+        return record;
+      })
       .sort((a, b) => a.endedAt - b.endedAt)
       .slice(-MAX_HISTORY_RECORDS);
+    return { history, addedIds };
   } catch {
-    return EMPTY_HISTORY;
+    return empty;
   }
 }
 
@@ -63,9 +81,27 @@ function notify(): void {
 }
 
 /**
+ * Saves a history with new record IDs, so that the IDs stay the same after a
+ * reload. Does not tell the subscribers, because the records do not change.
+ *
+ * @returns The stored data after the write, or `raw` if the write fails.
+ */
+function writeIds(history: readonly SessionRecord[], raw: string): string {
+  const updated = JSON.stringify(history);
+  try {
+    window.localStorage.setItem(HISTORY_STORAGE_KEY, updated);
+    return updated;
+  } catch {
+    // Keep the IDs in the cache for the current visit.
+    return raw;
+  }
+}
+
+/**
  * Reads the history from `localStorage`. Returns an empty history if the data
  * is missing or not valid. Returns the same array while the stored data does
- * not change. If a write failed, returns the history in memory.
+ * not change. If a write failed, returns the history in memory. Gives an ID
+ * to each record that has none, and saves the IDs.
  *
  * @returns The stored history.
  */
@@ -75,8 +111,9 @@ export function loadHistory(): readonly SessionRecord[] {
   }
   const raw = readRaw();
   if (raw !== cachedRaw) {
-    cachedRaw = raw;
-    cachedHistory = parseHistory(raw);
+    const { history, addedIds } = parseHistory(raw);
+    cachedRaw = addedIds && raw !== null ? writeIds(history, raw) : raw;
+    cachedHistory = history;
   }
   return cachedHistory;
 }
