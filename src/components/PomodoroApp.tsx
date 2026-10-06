@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { usePomodoro } from "@/hooks/usePomodoro";
+import { MAX_DESCRIPTION_LENGTH, recordKey, type SessionRecord } from "@/lib/history";
 import { SESSION_KINDS, SESSION_LABEL, formatDuration } from "@/lib/session";
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -10,6 +11,8 @@ const buttonBase =
   "rounded-lg px-4 py-2 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 disabled:cursor-not-allowed disabled:opacity-50";
 const primaryButton = `${buttonBase} bg-rose-600 text-white hover:bg-rose-700 dark:bg-rose-500 dark:hover:bg-rose-400 dark:text-zinc-950`;
 const secondaryButton = `${buttonBase} border border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800`;
+const textField =
+  "w-full rounded-lg border border-zinc-300 bg-transparent px-3 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500 dark:border-zinc-700";
 
 /**
  * Tells if a keyboard event comes from an element that uses the space key itself.
@@ -24,6 +27,101 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   return target.isContentEditable || target.closest("button, a, input, textarea, select, [role='button']") !== null;
 }
 
+/** The properties of {@link HistoryItem}. */
+interface HistoryItemProps {
+  /** The record to show. */
+  record: SessionRecord;
+  /** Saves a new description for the record. */
+  onEditDescription: (key: string, text: string) => void;
+}
+
+/**
+ * One record in today's list. A focus record shows its description and lets
+ * the user edit it.
+ */
+function HistoryItem({ record, onEditDescription }: HistoryItemProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const editButton = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+  const times = `${timeFormat.format(record.startedAt)}–${timeFormat.format(record.endedAt)}`;
+
+  useEffect(() => {
+    if (!editing && returnFocus.current) {
+      returnFocus.current = false;
+      editButton.current?.focus();
+    }
+  }, [editing]);
+
+  const startEdit = () => {
+    setDraft(record.description ?? "");
+    setEditing(true);
+  };
+
+  const finishEdit = (save: boolean) => {
+    if (save) {
+      onEditDescription(recordKey(record), draft);
+    }
+    returnFocus.current = true;
+    setEditing(false);
+  };
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      finishEdit(true);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      finishEdit(false);
+    }
+  };
+
+  return (
+    <li className="flex flex-col gap-2 py-2">
+      <div className="flex justify-between gap-4">
+        <span>{SESSION_LABEL[record.kind]}</span>
+        <span className="text-zinc-600 tabular-nums dark:text-zinc-400">{times}</span>
+      </div>
+      {record.kind === "focus" &&
+        (editing ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              aria-label={`Description of the focus session ${times}`}
+              value={draft}
+              maxLength={MAX_DESCRIPTION_LENGTH}
+              autoFocus
+              onChange={(event) => setDraft(event.target.value.slice(0, MAX_DESCRIPTION_LENGTH))}
+              onKeyDown={onKeyDown}
+              className={`${textField} min-w-0 flex-1 text-sm`}
+            />
+            <button type="button" onClick={() => finishEdit(true)} className={`${primaryButton} text-sm`}>
+              Save
+            </button>
+            <button type="button" onClick={() => finishEdit(false)} className={`${secondaryButton} text-sm`}>
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-4">
+            <span data-testid="record-description" className="break-words text-sm text-zinc-700 dark:text-zinc-300">
+              {record.description}
+            </span>
+            <button
+              ref={editButton}
+              type="button"
+              aria-label={`Edit description of the focus session ${times}`}
+              onClick={startEdit}
+              className={`${secondaryButton} shrink-0 px-3 py-1 text-sm`}
+            >
+              Edit description
+            </button>
+          </div>
+        ))}
+    </li>
+  );
+}
+
 /** The Pomodoro timer with its controls and today's history. */
 export function PomodoroApp() {
   const {
@@ -33,6 +131,9 @@ export function PomodoroApp() {
     todayFocusCount,
     historySize,
     storageAvailable,
+    description,
+    setDescription,
+    editDescription,
     start,
     pause,
     toggle,
@@ -112,6 +213,22 @@ export function PomodoroApp() {
           {time}
         </p>
 
+        {timer.kind === "focus" && (
+          <div className="flex w-full flex-col gap-1">
+            <label htmlFor="focus-description" className="text-sm font-medium">
+              What are you working on?
+            </label>
+            <input
+              id="focus-description"
+              type="text"
+              value={description}
+              maxLength={MAX_DESCRIPTION_LENGTH}
+              onChange={(event) => setDescription(event.target.value)}
+              className={textField}
+            />
+          </div>
+        )}
+
         <div className="flex flex-wrap justify-center gap-3">
           {timer.status === "running" ? (
             <button type="button" onClick={pause} className={primaryButton}>
@@ -149,12 +266,7 @@ export function PomodoroApp() {
         ) : (
           <ul aria-label="Completed sessions today" className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
             {today.map((record) => (
-              <li key={`${record.startedAt}-${record.endedAt}-${record.kind}`} className="flex justify-between gap-4 py-2">
-                <span>{SESSION_LABEL[record.kind]}</span>
-                <span className="text-zinc-600 tabular-nums dark:text-zinc-400">
-                  {timeFormat.format(record.startedAt)}–{timeFormat.format(record.endedAt)}
-                </span>
-              </li>
+              <HistoryItem key={recordKey(record)} record={record} onEditDescription={editDescription} />
             ))}
           </ul>
         )}

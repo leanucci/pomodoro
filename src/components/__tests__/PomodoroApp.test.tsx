@@ -301,4 +301,185 @@ describe("PomodoroApp", () => {
     expect(focusCount()).toBe("1 focus session today");
     clearStoredHistory();
   });
+
+  describe("descriptions", () => {
+    const LABEL = "What are you working on?";
+
+    function descriptionField() {
+      return screen.getByLabelText(LABEL) as HTMLInputElement;
+    }
+
+    function typeDescription(text: string) {
+      fireEvent.change(descriptionField(), { target: { value: text } });
+    }
+
+    function editButton() {
+      return screen.getByRole("button", { name: /^Edit description of the focus session/ });
+    }
+
+    function editField() {
+      return screen.getByRole("textbox", { name: /^Description of the focus session/ }) as HTMLInputElement;
+    }
+
+    function storeFocusRecord(extra: Record<string, unknown>) {
+      const record = { kind: "focus", startedAt: NOW.getTime() - 30 * MINUTE, endedAt: NOW.getTime() - 5 * MINUTE };
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([{ ...record, plannedMs: 25 * MINUTE, ...extra }]));
+    }
+
+    it("shows an empty description field on a new visit", () => {
+      render(<PomodoroApp />);
+      expect(descriptionField()).toBeInTheDocument();
+      expect(descriptionField().value).toBe("");
+    });
+
+    it("keeps the field available while the focus session runs and is paused", () => {
+      render(<PomodoroApp />);
+      click("Start");
+      expect(descriptionField()).toBeInTheDocument();
+      click("Pause");
+      expect(descriptionField()).toBeInTheDocument();
+    });
+
+    it("shows the description in today's list when the focus session ends", () => {
+      render(<PomodoroApp />);
+      click("Start");
+      typeDescription("Write the report");
+      advance(25 * MINUTE + 1000);
+      const item = screen.getAllByRole("listitem")[0];
+      expect(item).toHaveTextContent("Focus");
+      expect(item).toHaveTextContent("Write the report");
+    });
+
+    it("stores the description with no spaces at the start and at the end", () => {
+      render(<PomodoroApp />);
+      typeDescription("  Read  ");
+      completeSession(25 * MINUTE);
+      expect(storedHistory()).toEqual([expect.objectContaining({ kind: "focus", description: "Read" })]);
+    });
+
+    it("stores no description when the field is empty", () => {
+      render(<PomodoroApp />);
+      completeSession(25 * MINUTE);
+      expect(storedHistory()[0]).not.toHaveProperty("description");
+    });
+
+    it("shows an empty field for the next focus session", () => {
+      render(<PomodoroApp />);
+      typeDescription("Write the report");
+      completeSession(25 * MINUTE);
+      click("Focus");
+      expect(descriptionField().value).toBe("");
+    });
+
+    it("does not show the field during a short break or a long break", () => {
+      render(<PomodoroApp />);
+      click("Short break");
+      expect(screen.queryByLabelText(LABEL)).not.toBeInTheDocument();
+      click("Long break");
+      expect(screen.queryByLabelText(LABEL)).not.toBeInTheDocument();
+    });
+
+    it("does not change the history and clears the field on skip", () => {
+      render(<PomodoroApp />);
+      click("Start");
+      typeDescription("Write the report");
+      advance(MINUTE);
+      click("Skip");
+      expect(localStorage.getItem(HISTORY_STORAGE_KEY)).toBeNull();
+      click("Focus");
+      expect(descriptionField().value).toBe("");
+    });
+
+    it("keeps the description on reset", () => {
+      render(<PomodoroApp />);
+      click("Start");
+      typeDescription("Write the report");
+      advance(MINUTE);
+      click("Reset");
+      expect(descriptionField().value).toBe("Write the report");
+    });
+
+    it("keeps only the first 100 characters of pasted text", () => {
+      render(<PomodoroApp />);
+      expect(descriptionField()).toHaveAttribute("maxLength", "100");
+      typeDescription("a".repeat(120));
+      expect(descriptionField().value).toBe("a".repeat(100));
+    });
+
+    it("saves an edit with the Enter key and keeps it after a reload", () => {
+      storeFocusRecord({ description: "Draft" });
+      const { unmount } = render(<PomodoroApp />);
+      expect(screen.getByTestId("record-description")).toHaveTextContent("Draft");
+      fireEvent.click(editButton());
+      expect(editField()).toHaveFocus();
+      fireEvent.change(editField(), { target: { value: "Final draft" } });
+      fireEvent.keyDown(editField(), { key: "Enter" });
+      expect(screen.getByTestId("record-description")).toHaveTextContent("Final draft");
+      expect(editButton()).toHaveFocus();
+      unmount();
+
+      render(<PomodoroApp />);
+      expect(screen.getByTestId("record-description")).toHaveTextContent("Final draft");
+    });
+
+    it("removes the description when the edit is empty", () => {
+      storeFocusRecord({ description: "Draft" });
+      render(<PomodoroApp />);
+      fireEvent.click(editButton());
+      fireEvent.change(editField(), { target: { value: "   " } });
+      click("Save");
+      expect(storedHistory()[0]).not.toHaveProperty("description");
+      expect(screen.getByTestId("record-description")).toBeEmptyDOMElement();
+    });
+
+    it("applies the same rules to an edit", () => {
+      storeFocusRecord({});
+      render(<PomodoroApp />);
+      fireEvent.click(editButton());
+      expect(editField()).toHaveAttribute("maxLength", "100");
+      fireEvent.change(editField(), { target: { value: ` ${"b".repeat(120)}` } });
+      fireEvent.keyDown(editField(), { key: "Enter" });
+      expect(storedHistory()[0]).toHaveProperty("description", "b".repeat(99));
+    });
+
+    it("does not change the description when the user presses Escape", () => {
+      storeFocusRecord({ description: "Draft" });
+      render(<PomodoroApp />);
+      fireEvent.click(editButton());
+      fireEvent.change(editField(), { target: { value: "Something else" } });
+      fireEvent.keyDown(editField(), { key: "Escape" });
+      expect(screen.queryByRole("textbox", { name: /^Description of the focus session/ })).not.toBeInTheDocument();
+      expect(screen.getByTestId("record-description")).toHaveTextContent("Draft");
+      expect(storedHistory()[0]).toHaveProperty("description", "Draft");
+    });
+
+    it("types a space and does not control the timer when the focus is in a description field", () => {
+      storeFocusRecord({});
+      render(<PomodoroApp />);
+      descriptionField().focus();
+      fireEvent.keyDown(descriptionField(), { key: " ", code: "Space" });
+      typeDescription(" ");
+      expect(descriptionField().value).toBe(" ");
+      expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+
+      fireEvent.click(editButton());
+      fireEvent.keyDown(editField(), { key: " ", code: "Space" });
+      expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+      expect(remaining()).toBe("25:00");
+    });
+
+    it("shows records from spec 001 with no description and no error", () => {
+      storeFocusRecord({});
+      render(<PomodoroApp />);
+      expect(focusCount()).toBe("1 focus session today");
+      expect(screen.getByTestId("record-description")).toBeEmptyDOMElement();
+    });
+
+    it("shows a record with no description when the stored description is a number", () => {
+      storeFocusRecord({ description: 42 });
+      render(<PomodoroApp />);
+      expect(focusCount()).toBe("1 focus session today");
+      expect(screen.getByTestId("record-description")).toBeEmptyDOMElement();
+    });
+  });
 });
