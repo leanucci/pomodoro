@@ -457,16 +457,23 @@ describe("PomodoroApp", () => {
     it("types a space and does not control the timer when the focus is in a description field", () => {
       storeFocusRecord({});
       render(<PomodoroApp />);
+      click("Start");
+      advance(MINUTE);
+      expect(remaining()).toBe("24:00");
+
       descriptionField().focus();
       fireEvent.keyDown(descriptionField(), { key: " ", code: "Space" });
       typeDescription(" ");
       expect(descriptionField().value).toBe(" ");
-      expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+      advance(MINUTE);
+      expect(remaining()).toBe("23:00");
 
       fireEvent.click(editButton());
       fireEvent.keyDown(editField(), { key: " ", code: "Space" });
-      expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
-      expect(remaining()).toBe("25:00");
+      expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+      advance(MINUTE);
+      expect(remaining()).toBe("22:00");
     });
 
     it("changes only one of two records with the same type, start time, and end time", () => {
