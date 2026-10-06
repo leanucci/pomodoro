@@ -476,6 +476,37 @@ describe("PomodoroApp", () => {
       expect(remaining()).toBe("22:00");
     });
 
+    it("keeps an edit in memory and shows the notice when the storage is not available", () => {
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+        throw new DOMException("Blocked", "SecurityError");
+      });
+      render(<PomodoroApp />);
+      typeDescription("Draft");
+      completeSession(25 * MINUTE);
+      expect(screen.getByTestId("record-description")).toHaveTextContent("Draft");
+
+      fireEvent.click(editButton());
+      fireEvent.change(editField(), { target: { value: "Final draft" } });
+      fireEvent.keyDown(editField(), { key: "Enter" });
+      expect(screen.getByTestId("record-description")).toHaveTextContent("Final draft");
+      expect(screen.getByRole("status")).toHaveTextContent("The browser storage is not available.");
+      clearStoredHistory();
+    });
+
+    it("keeps an edit in memory and shows the notice when the storage cannot save the edit", () => {
+      storeFocusRecord({ description: "Draft" });
+      render(<PomodoroApp />);
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+        throw new DOMException("Full", "QuotaExceededError");
+      });
+      fireEvent.click(editButton());
+      fireEvent.change(editField(), { target: { value: "Final draft" } });
+      fireEvent.keyDown(editField(), { key: "Enter" });
+      expect(screen.getByTestId("record-description")).toHaveTextContent("Final draft");
+      expect(screen.getByRole("status")).toHaveTextContent("The browser storage is not available.");
+      clearStoredHistory();
+    });
+
     it("changes only one of two records with the same type, start time, and end time", () => {
       const record = {
         kind: "focus",
