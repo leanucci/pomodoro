@@ -17,3 +17,7 @@ The project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A control to clear the history, with confirmation.
 - A notice when the browser storage is not available.
 - A description for each focus session, with 100 characters at most. Today's list shows the descriptions and lets the user edit them.
+
+### Changed
+
+- The README states the live URL, lists the features, and gives the commands to run, test, and build the app.
